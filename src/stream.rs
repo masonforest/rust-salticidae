@@ -1,9 +1,12 @@
+use crypto::digest::Digest;
+use crypto::sha1::Sha1;
 use crate::header::{self, Header};
 use async_trait::async_trait;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 const MAGIC: u32 = 0;
+const CHECKSUM_SIZE: usize = 4;
 
 pub trait Encodable {
     fn encode(&self) -> Vec<u8>;
@@ -32,7 +35,7 @@ impl Stream for TcpStream {
             magic: MAGIC,
             opcode: message_type,
             length: payload_bytes.len() as u32,
-            check_sum: [1 as u8, 2, 3, 4],
+            check_sum: check_sum(&payload_bytes),
         }
         .into();
         self.write_all(&header_bytes).await.unwrap();
@@ -51,6 +54,19 @@ impl Stream for TcpStream {
         let header: Header = buf[0..n].to_vec().into();
         let mut payload_bytes = vec![0u8; header.length as usize];
         self.read_exact(&mut payload_bytes).await.unwrap();
+        if check_sum(&payload_bytes) != header.check_sum {
+            panic!("invalid check sum");
+        }
         (header, payload_bytes)
     }
+}
+
+fn check_sum(bytes: &[u8]) -> [u8; CHECKSUM_SIZE] {
+    let mut hash = [0; 20];
+    let mut output_bytes = [0; CHECKSUM_SIZE];
+    let mut hasher = Sha1::new();
+    hasher.input(bytes);
+    hasher.result(&mut hash);
+    output_bytes.copy_from_slice(&hash[0..CHECKSUM_SIZE]);
+    output_bytes
 }

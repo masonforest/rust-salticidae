@@ -1,5 +1,6 @@
 extern crate byteorder;
 extern crate hex;
+extern crate crypto;
 
 pub use stream::{Encodable, Stream};
 pub mod header;
