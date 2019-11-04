@@ -20,7 +20,7 @@ async fn listen(rx1: Receiver<TcpListener>, server_name: &'static str) {
         let (mut socket, _) = listener.accept().await.unwrap();
         println!("[{}] accepted, waiting for greetings.", server_name);
         tokio::spawn(async move {
-            let (header, received_bytes) = socket.read_message().await;
+            let (header, received_bytes) = socket.read_message().await.unwrap();
             if let Message::Hello { name, text } = Message::decode(&received_bytes, header.opcode) {
                 println!("[{}] {} says {}", server_name, name, text);
                 socket.write_message(&Message::Ack {}, 1).await;
@@ -38,7 +38,7 @@ async fn connect(addr: &str, client_name: &str) {
         text: "Hello there!".to_string(),
     };
     socket.write_message(&original, 0).await;
-    let (header, received_bytes) = socket.read_message().await;
+    let (header, received_bytes) = socket.read_message().await.unwrap();
     if let Message::Ack {} = Message::decode(&received_bytes, header.opcode) {
         println!("[{}] the peer knows", client_name)
     }

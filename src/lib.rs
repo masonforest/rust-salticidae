@@ -5,6 +5,7 @@ extern crate crypto;
 pub use stream::{Encodable, Stream};
 pub mod header;
 pub mod stream;
+pub mod error;
 
 #[cfg(test)]
 mod tests {
@@ -74,7 +75,7 @@ mod tests {
             loop {
                 let (mut socket, _) = listener.accept().await.unwrap();
                 tokio::spawn(async move {
-                    let (header, received_bytes) = socket.read_message().await;
+                    let (header, received_bytes) = socket.read_message().await.unwrap();
                     if let Message::Hello { .. } = Message::decode(&received_bytes, header.opcode) {
                         socket.write_message(&Message::Ack {}, 1).await;
                     }
@@ -89,7 +90,7 @@ mod tests {
                 text: "Hello there!".to_string(),
             };
             stream.write_message(&original, 0).await;
-            let (header, received_bytes) = stream.read_message().await;
+            let (header, received_bytes) = stream.read_message().await.unwrap();
             assert_eq!(
                 Message::Ack {},
                 Message::decode(&received_bytes, header.opcode)

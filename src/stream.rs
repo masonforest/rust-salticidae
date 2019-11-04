@@ -4,6 +4,7 @@ use crate::header::{self, Header};
 use async_trait::async_trait;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+use crate::error::Error;
 
 const MAGIC: u32 = 0;
 const CHECKSUM_SIZE: usize = 4;
@@ -20,7 +21,7 @@ pub trait Stream {
         message: &E,
         message_type: u8,
     );
-    async fn read_message(&mut self) -> (Header, Vec<u8>);
+    async fn read_message(&mut self) -> Result<(Header, Vec<u8>), Error>;
 }
 
 #[async_trait]
@@ -42,23 +43,27 @@ impl Stream for TcpStream {
         self.write_all(&payload_bytes).await.unwrap();
     }
 
-    async fn read_message(&mut self) -> (Header, Vec<u8>) {
+    async fn read_message(&mut self) -> Result<(Header, Vec<u8>), Error> {
         let mut buf: [u8; header::LEN] = [0; header::LEN];
-        let n = match self.read_exact(&mut buf).await {
-            Ok(n) if n == 0 => panic!("Got 0 bytes from socket"),
-            Ok(n) => n,
-            Err(e) => {
-                panic!("failed to read from socket; err = {:?}", e);
-            }
-        };
-        let header: Header = buf[0..n].to_vec().into();
-        let mut payload_bytes = vec![0u8; header.length as usize];
-        self.read_exact(&mut payload_bytes).await.unwrap();
-        if check_sum(&payload_bytes) != header.check_sum {
-            panic!("invalid check sum");
+        let n = self.read_exact(&mut buf).await?;
+        if n == 0 {
+            return Err(Error::StreamClosed)
         }
-        (header, payload_bytes)
+        let header: Header = buf[0..n].to_vec().into();
+        let mut payload = vec![0u8; header.length as usize];
+        self.read_exact(&mut payload).await?;
+        verify_checksum(&header, &payload)?;
+        Ok((header, payload))
     }
+}
+
+fn verify_checksum(header: &Header, payload: &[u8]) -> Result<(), Error>{
+
+        if check_sum(&payload) == header.check_sum {
+            Ok(())
+        } else {
+            Err(Error::InvalidChecksum)
+        }
 }
 
 fn check_sum(bytes: &[u8]) -> [u8; CHECKSUM_SIZE] {
