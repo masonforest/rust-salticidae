@@ -1,10 +1,10 @@
-use crypto::digest::Digest;
-use crypto::sha1::Sha1;
+use crate::error::Error;
 use crate::header::{self, Header};
 use async_trait::async_trait;
+use crypto::digest::Digest;
+use crypto::sha1::Sha1;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use crate::error::Error;
 
 const MAGIC: u32 = 0;
 const CHECKSUM_SIZE: usize = 4;
@@ -47,7 +47,7 @@ impl Stream for TcpStream {
         let mut buf: [u8; header::LEN] = [0; header::LEN];
         let n = self.read_exact(&mut buf).await?;
         if n == 0 {
-            return Err(Error::StreamClosed)
+            return Err(Error::StreamClosed);
         }
         let header: Header = buf[0..n].to_vec().into();
         let mut payload = vec![0u8; header.length as usize];
@@ -57,13 +57,12 @@ impl Stream for TcpStream {
     }
 }
 
-fn verify_checksum(header: &Header, payload: &[u8]) -> Result<(), Error>{
-
-        if check_sum(&payload) == header.check_sum {
-            Ok(())
-        } else {
-            Err(Error::InvalidChecksum)
-        }
+fn verify_checksum(header: &Header, payload: &[u8]) -> Result<(), Error> {
+    if check_sum(&payload) == header.check_sum {
+        Ok(())
+    } else {
+        Err(Error::InvalidChecksum)
+    }
 }
 
 fn check_sum(bytes: &[u8]) -> [u8; CHECKSUM_SIZE] {

@@ -4,9 +4,7 @@ use std::io;
 pub enum Error {
     InvalidChecksum,
     StreamClosed,
-    IOError {
-        message: String
-    },
+    IOError { message: String },
 }
 impl From<io::Error> for Error {
     fn from(error: io::Error) -> Self {

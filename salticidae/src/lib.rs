@@ -1,11 +1,20 @@
 extern crate byteorder;
-extern crate hex;
 extern crate crypto;
+extern crate hex;
 
+pub use byteorder::{LittleEndian, WriteBytesExt};
 pub use stream::{Encodable, Stream};
+pub mod error;
 pub mod header;
 pub mod stream;
-pub mod error;
+
+#[cfg(feature = "salticidae_derive")]
+#[allow(unused_imports)]
+#[macro_use]
+extern crate salticidae_derive;
+#[cfg(feature = "salticidae_derive")]
+#[doc(hidden)]
+pub use salticidae_derive::Serialize;
 
 #[cfg(test)]
 mod tests {

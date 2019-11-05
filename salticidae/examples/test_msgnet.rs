@@ -1,5 +1,5 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use salticidae::{Encodable, Stream};
+use salticidae::{error::Error, Encodable, Stream};
 use std::io::{Cursor, Read};
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
@@ -9,6 +9,9 @@ use tokio::sync::{
     oneshot::{Receiver, Sender},
 };
 
+trait Serializable {
+    fn encode(&self) -> Vec<u8>;
+}
 async fn bind(addr: &str, tx: Sender<TcpListener>) {
     let listener = TcpListener::bind(addr).await.unwrap();
     tx.send(listener).unwrap();
@@ -20,16 +23,20 @@ async fn listen(rx1: Receiver<TcpListener>, server_name: &'static str) {
         let (mut socket, _) = listener.accept().await.unwrap();
         println!("[{}] accepted, waiting for greetings.", server_name);
         tokio::spawn(async move {
-            let (header, received_bytes) = socket.read_message().await.unwrap();
-            if let Message::Hello { name, text } = Message::decode(&received_bytes, header.opcode) {
-                println!("[{}] {} says {}", server_name, name, text);
-                socket.write_message(&Message::Ack {}, 1).await;
-            }
+            respond(&mut socket, server_name).await;
         });
     }
 }
 
-async fn connect(addr: &str, client_name: &str) {
+async fn respond(socket: &mut TcpStream, server_name: &'static str) {
+    let (header, received_bytes) = socket.read_message().await.unwrap();
+    if let Message::Hello { name, text } = Message::decode(&received_bytes, header.opcode) {
+        println!("[{}] {} says {}", server_name, name, text);
+        socket.write_message(&Message::Ack {}, 1).await;
+    }
+}
+
+async fn say_hello(addr: &str, client_name: &str) {
     let mut socket = TcpStream::connect(addr).await.unwrap();
 
     println!("[{}] connected, sending hello.", client_name);
@@ -40,11 +47,11 @@ async fn connect(addr: &str, client_name: &str) {
     socket.write_message(&original, 0).await;
     let (header, received_bytes) = socket.read_message().await.unwrap();
     if let Message::Ack {} = Message::decode(&received_bytes, header.opcode) {
-        println!("[{}] the peer knows", client_name)
-    }
+        println!("[{}] the peer knows", client_name);
+    };
 }
 
-fn main() {
+fn main() -> Result<(), Error> {
     let alices_addr = "127.0.0.1:12345";
     let bobs_addr = "127.0.0.1:12346";
     let rt = Runtime::new().unwrap();
@@ -54,9 +61,10 @@ fn main() {
     rt.block_on(bind(bobs_addr, tx2));
     rt.spawn(listen(rx1, "alice"));
     rt.spawn(listen(rx2, "bob"));
-    rt.spawn(connect(alices_addr, "bob"));
-    rt.spawn(connect(bobs_addr, "alice"));
+    rt.spawn(say_hello(alices_addr, "alice"));
+    rt.spawn(say_hello(alices_addr, "bob"));
     rt.block_on(tokio::future::pending::<()>());
+    Ok(())
 }
 
 #[derive(Debug, PartialEq, Clone)]
