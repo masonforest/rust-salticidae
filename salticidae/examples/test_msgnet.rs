@@ -1,6 +1,4 @@
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use salticidae::{error::Error, Encodable, Stream};
-use std::io::{Cursor, Read};
+use salticidae::{error::Error, Deserializable, Deserialize, Serializable, Serialize, Stream};
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 use tokio::runtime::Runtime;
@@ -9,9 +7,12 @@ use tokio::sync::{
     oneshot::{Receiver, Sender},
 };
 
-trait Serializable {
-    fn encode(&self) -> Vec<u8>;
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+enum Message {
+    Hello { name: String, text: String },
+    Ack {},
 }
+
 async fn bind(addr: &str, tx: Sender<TcpListener>) {
     let listener = TcpListener::bind(addr).await.unwrap();
     tx.send(listener).unwrap();
@@ -30,7 +31,7 @@ async fn listen(rx1: Receiver<TcpListener>, server_name: &'static str) {
 
 async fn respond(socket: &mut TcpStream, server_name: &'static str) {
     let (header, received_bytes) = socket.read_message().await.unwrap();
-    if let Message::Hello { name, text } = Message::decode(&received_bytes, header.opcode) {
+    if let Message::Hello { name, text } = Message::deserialize(&received_bytes, header.opcode) {
         println!("[{}] {} says {}", server_name, name, text);
         socket.write_message(&Message::Ack {}, 1).await;
     }
@@ -46,7 +47,7 @@ async fn say_hello(addr: &str, client_name: &str) {
     };
     socket.write_message(&original, 0).await;
     let (header, received_bytes) = socket.read_message().await.unwrap();
-    if let Message::Ack {} = Message::decode(&received_bytes, header.opcode) {
+    if let Message::Ack {} = Message::deserialize(&received_bytes, header.opcode) {
         println!("[{}] the peer knows", client_name);
     };
 }
@@ -65,48 +66,4 @@ fn main() -> Result<(), Error> {
     rt.spawn(say_hello(alices_addr, "bob"));
     rt.block_on(tokio::future::pending::<()>());
     Ok(())
-}
-
-#[derive(Debug, PartialEq, Clone)]
-enum Message {
-    Hello { name: String, text: String },
-    Ack {},
-}
-
-impl Encodable for Message {
-    fn encode(&self) -> Vec<u8> {
-        match self {
-            Message::Hello { name, text } => {
-                let mut wtr = vec![];
-                wtr.write_u32::<LittleEndian>(name.len() as u32).unwrap();
-                wtr.extend(name.as_bytes().to_vec());
-                wtr.extend(text.as_bytes().to_vec());
-                wtr
-            }
-            Message::Ack {} => vec![],
-        }
-    }
-
-    fn decode(bytes: &[u8], message_type: u8) -> Self {
-        match message_type {
-            0 => {
-                let mut rdr = Cursor::new(bytes);
-                let name_len = rdr.read_u32::<LittleEndian>().unwrap();
-                let mut name_bytes = vec![0u8; name_len as usize];
-                let mut text_bytes = Default::default();
-                Read::read_exact(&mut rdr, &mut name_bytes).unwrap();
-                Read::read_to_end(&mut rdr, &mut text_bytes).unwrap();
-                Message::Hello {
-                    name: std::str::from_utf8(&name_bytes.clone())
-                        .unwrap()
-                        .to_string(),
-                    text: std::str::from_utf8(&text_bytes.clone())
-                        .unwrap()
-                        .to_string(),
-                }
-            }
-            1 => Message::Ack {},
-            _ => panic!("unkown type"),
-        }
-    }
 }

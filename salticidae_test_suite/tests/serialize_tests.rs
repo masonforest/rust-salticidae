@@ -1,12 +1,15 @@
 extern crate hex;
-extern crate salticidae_derive;
-use salticidae_derive::Serialize;
+use salticidae::{Deserialize, Serialize};
 
 trait Serializable {
     fn serialize(&self) -> Vec<u8>;
 }
 
-#[derive(Serialize)]
+trait Deserializable {
+    fn deserialize(bytes: &[u8], message_type: u8) -> Self;
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 enum Message {
     Hello { name: String, text: String },
     Ack {},
@@ -14,15 +17,17 @@ enum Message {
 
 #[test]
 fn test_serialize_empty() {
-    assert_eq!(Message::Ack{}.serialize(), []);
+    assert_eq!(Message::Ack {}.serialize(), []);
 }
 
 #[test]
-fn test_serialize() {
-    let message = Message::Hello{
+fn test_round_trip() {
+    let message = Message::Hello {
         name: "name".to_string(),
         text: "text".to_string(),
     };
+    let message_bytes = message.serialize();
 
-    assert_eq!(message.serialize(), hex::decode("6e616d650400000074657874").unwrap());
+    println!("{:?}", message_bytes);
+    assert_eq!(message, Message::deserialize(&message_bytes, 0));
 }

@@ -9,16 +9,19 @@ use tokio::net::TcpStream;
 const MAGIC: u32 = 0;
 const CHECKSUM_SIZE: usize = 4;
 
-pub trait Encodable {
-    fn encode(&self) -> Vec<u8>;
-    fn decode(vec: &[u8], message_type: u8) -> Self;
+pub trait Serializable {
+    fn serialize(&self) -> Vec<u8>;
+}
+
+pub trait Deserializable {
+    fn deserialize(bytes: &[u8], message_type: u8) -> Self;
 }
 
 #[async_trait]
 pub trait Stream {
-    async fn write_message<E: Encodable + std::marker::Sync>(
+    async fn write_message<S: Serializable + std::marker::Sync>(
         &mut self,
-        message: &E,
+        message: &S,
         message_type: u8,
     );
     async fn read_message(&mut self) -> Result<(Header, Vec<u8>), Error>;
@@ -26,12 +29,12 @@ pub trait Stream {
 
 #[async_trait]
 impl Stream for TcpStream {
-    async fn write_message<E: Encodable + std::marker::Sync>(
+    async fn write_message<S: Serializable + std::marker::Sync>(
         &mut self,
-        message: &E,
+        message: &S,
         message_type: u8,
     ) {
-        let payload_bytes = message.encode();
+        let payload_bytes = message.serialize();
         let header_bytes: Vec<u8> = Header {
             magic: MAGIC,
             opcode: message_type,

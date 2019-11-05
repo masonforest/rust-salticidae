@@ -13,9 +13,13 @@ Add the following to your `Cargo.toml`
 
 #### Test
 
+    $ cd salticidae_test_suite
     $ cargo test
 
+
 ### Demo
+
+See: [test_msgnet.rs](https://github.com/masonforest/rust-salticidae/blob/master/salticidae/examples/test_msgnet.rs) for a demo of salticidae in action.
 
     $ cargo run --example test_msgnet
     [alice] connected, sending hello.
